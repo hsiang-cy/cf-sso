@@ -3,12 +3,13 @@ main = "src/index.ts"
 compatibility_date = "2024-05-01"
 compatibility_flags = ["nodejs_compat"]
 
+tsconfig = "tsconfig.json"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "sso-local-db"
 database_id = "0c40777f-2079-4c7e-acf4-f35b5df9dd08"
 
-tsconfig = "tsconfig.json"
 [vars]
 JWT_SECRET = "dev_secret_123"
 SESSION_DURATION = "86400"

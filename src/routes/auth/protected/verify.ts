@@ -1,11 +1,8 @@
 import { Hono } from 'hono';
 import { Env } from '@/types/env';
 import { AuthService } from '@/services/authService';
-import { createProtectedRoute } from '@/middleware/authFactory';
 
-const verifyRoutes = new Hono<{ Bindings: Env }>()
-  .use('*', createProtectedRoute());
-
+const verifyRoutes = new Hono<{ Bindings: Env }>();
 // 驗證令牌路由
 verifyRoutes.get('/verify', async (c) => {
   try {

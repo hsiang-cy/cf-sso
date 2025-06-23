@@ -2,10 +2,8 @@ import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { Env } from '@/types/env';
 import { AuthService } from '@/services/authService';
-import { createProtectedRoute } from '@/middleware/authFactory';
 
 const logoutRoutes = new Hono<{ Bindings: Env }>()
-  .use('*', createProtectedRoute());
 
 // 登出路由
 logoutRoutes.post('/logout', async (c) => {
