@@ -1,8 +1,7 @@
-// src/routes/auth/public.ts
 import { Hono } from 'hono';
 import { setCookie } from 'hono/cookie';
-import { Env } from '../../types/env';
-import { AuthService } from '../../services/authService';
+import { Env } from '@/types/env';
+import { AuthService } from '@/services/authService';
 
 const publicAuth = new Hono<{ Bindings: Env }>();
 
@@ -18,19 +17,34 @@ publicAuth.post('/login', async (c) => {
     const authService = new AuthService(c.env.DB, c.env.JWT_SECRET || 'dev_secret_123');
     const result = await authService.login(email, password);
 
-    setCookie(c, 'sso_token', result.token, {
+    // 設置 access token 為 HTTP-only cookie (短期)
+    setCookie(c, 'sso_token', result.accessToken, {
       httpOnly: true,
+      secure: true,
+      sameSite: 'Strict',
       path: '/',
-      maxAge: 86400
+      maxAge: 900 // 15分鐘，與 token 過期時間相同
     });
 
-    return c.json({ token: result.token });
+    // 設置 refresh token 為 HTTP-only cookie (長期)
+    setCookie(c, 'sso_refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Strict',
+      path: '/',
+      maxAge: 604800 // 7天
+    });
+
+    return c.json({
+      message: '登入成功',
+      user: result.user
+    });
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : '登入失敗' }, 401);
   }
 });
 
-// 註冊路由
+// 註冊路由保持不變
 publicAuth.post('/register', async (c) => {
   try {
     const { email, password } = await c.req.json();

@@ -6,6 +6,7 @@ export const createAuthMiddleware = (jwtSecret: string) => {
   return jwt({
     secret: jwtSecret,
     cookie: 'sso_token',
+    alg: 'HS256',
   });
 };
 

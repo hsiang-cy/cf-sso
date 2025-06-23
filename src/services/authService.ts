@@ -14,6 +14,7 @@ export class AuthService {
     this.jwtSecret = jwtSecret;
   }
 
+  // src/services/authService.ts
   async login(email: string, password: string) {
     const user = await this.db.prepare(
       'SELECT * FROM users WHERE email = ?'
@@ -23,23 +24,40 @@ export class AuthService {
       throw new Error('用戶不存在');
     }
 
+    // 驗證密碼
     const valid = await verifyPassword(password, user.password_hash, user.salt);
     if (!valid) {
       throw new Error('密碼錯誤');
     }
 
-    const payload = {
+    // 生成 Access Token (短期)
+    const accessPayload = {
       sub: user.id,
-      exp: Math.floor(Date.now() / 1000) + 86400 // 24小時
+      type: 'access',
+      exp: Math.floor(Date.now() / 1000) + 900 // 15分鐘
     };
-    const token = await sign(payload, this.jwtSecret);
 
-    // 保存會話
+    // 生成 Refresh Token (長期)
+    const refreshPayload = {
+      sub: user.id,
+      type: 'refresh',
+      exp: Math.floor(Date.now() / 1000) + 604800 // 7天
+    };
+
+    // 實際簽發 tokens
+    const accessToken = await sign(accessPayload, this.jwtSecret);
+    const refreshToken = await sign(refreshPayload, this.jwtSecret);
+
+    // 儲存 refresh token 到數據庫
     await this.db.prepare(
       'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)'
-    ).bind(token, user.id, payload.exp).run();
+    ).bind(refreshToken, user.id, refreshPayload.exp).run();
 
-    return { token, user: { id: user.id, email: user.email } };
+    return {
+      accessToken,
+      refreshToken,
+      user: { id: user.id, email: user.email }
+    };
   }
 
   async register(email: string, password: string) {
@@ -53,7 +71,7 @@ export class AuthService {
 
     const { hash, salt } = await hashPassword(password);
     const userId = crypto.randomUUID();
-    
+
     await this.db.prepare(
       'INSERT INTO users (id, email, password_hash, salt) VALUES (?, ?, ?, ?)'
     ).bind(userId, email, hash, salt).run();
@@ -72,7 +90,7 @@ export class AuthService {
       'SELECT expires_at FROM sessions WHERE token = ?'
     ).bind(token).first<{ expires_at: number }>();
 
-    if (!session || session.expires_at < Date.now()/1000) {
+    if (!session || session.expires_at < Date.now() / 1000) {
       throw new Error('會話已過期');
     }
 
@@ -87,7 +105,7 @@ export class AuthService {
     if (!token) {
       throw new Error('無效令牌');
     }
-    
+
     await this.db.prepare(
       'DELETE FROM sessions WHERE token = ?'
     ).bind(token).run();
@@ -103,5 +121,38 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  async refreshAccessToken(refreshToken: string) {
+    try {
+      // 驗證 refresh token
+      const payload = await verify(refreshToken, this.jwtSecret);
+
+      if (payload.type !== 'refresh') {
+        throw new Error('無效的刷新令牌類型');
+      }
+
+      // 檢查 refresh token 是否在數據庫中存在且有效
+      const session = await this.db.prepare(
+        'SELECT expires_at FROM sessions WHERE token = ? AND user_id = ?'
+      ).bind(refreshToken, payload.sub).first<{ expires_at: number }>();
+
+      if (!session || session.expires_at < Date.now() / 1000) {
+        throw new Error('刷新令牌已過期或無效');
+      }
+
+      // 生成新的 access token
+      const newAccessPayload = {
+        sub: payload.sub,
+        type: 'access',
+        exp: Math.floor(Date.now() / 1000) + 900 // 15分鐘
+      };
+
+      const newAccessToken = await sign(newAccessPayload, this.jwtSecret);
+
+      return { accessToken: newAccessToken };
+    } catch (error) {
+      throw new Error('刷新令牌失敗');
+    }
   }
 }
