@@ -5,7 +5,6 @@ import { AuthService } from '@/services/authService';
 
 const publicAuth = new Hono<{ Bindings: Env }>();
 
-// 登入路由
 publicAuth.post('/login', async (c) => {
   try {
     const { email, password } = await c.req.json();
@@ -17,13 +16,28 @@ publicAuth.post('/login', async (c) => {
     const authService = new AuthService(c.env.DB, c.env.JWT_SECRET || 'dev_secret_123');
     const result = await authService.login(email, password);
 
-    setCookie(c, 'sso_token', result.token, {
+    // 設置 access token
+    setCookie(c, 'sso_token', result.accessToken, {
       httpOnly: true,
+      secure: true,
+      sameSite: 'Strict',
       path: '/',
-      maxAge: 86400
+      maxAge: 900 // 15分鐘
     });
 
-    return c.json({ token: result.token });
+    // 設置 refresh token  
+    setCookie(c, 'sso_refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Strict',
+      path: '/',
+      maxAge: 604800 // 7天
+    });
+
+    return c.json({
+      message: '登入成功',
+      user: result.user
+    });
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : '登入失敗' }, 401);
   }

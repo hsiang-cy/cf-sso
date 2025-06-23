@@ -3,23 +3,29 @@ import { getCookie, setCookie } from 'hono/cookie';
 import { Env } from '@/types/env';
 import { AuthService } from '@/services/authService';
 
-const logoutRoutes = new Hono<{ Bindings: Env }>()
+const logoutRoutes = new Hono<{ Bindings: Env }>();
 
-// 登出路由
 logoutRoutes.post('/logout', async (c) => {
   try {
-    const token = getCookie(c, 'sso_token');
+    const refreshToken = getCookie(c, 'sso_refresh_token');
     
-    if (!token) {
-      return c.json({ error: '無效令牌' }, 400);
+    // 清除數據庫中的 refresh token
+    if (refreshToken) {
+      const authService = new AuthService(c.env.DB, c.env.JWT_SECRET || 'dev_secret_123');
+      await authService.logout(refreshToken);
     }
 
-    const authService = new AuthService(c.env.DB, c.env.JWT_SECRET || 'dev_secret_123');
-    await authService.logout(token);
-
+    // 清除所有相關 cookies
     setCookie(c, 'sso_token', '', {
       path: '/',
-      expires: new Date(0)
+      expires: new Date(0),
+      httpOnly: true
+    });
+
+    setCookie(c, 'sso_refresh_token', '', {
+      path: '/',
+      expires: new Date(0),
+      httpOnly: true
     });
 
     return c.json({ success: true });

@@ -85,30 +85,32 @@ export class AuthService {
       throw new Error('無效令牌');
     }
 
-    const payload = await verify(token, this.jwtSecret);
-    const session = await this.db.prepare(
-      'SELECT expires_at FROM sessions WHERE token = ?'
-    ).bind(token).first<{ expires_at: number }>();
+    try {
+      const payload = await verify(token, this.jwtSecret);
 
-    if (!session || session.expires_at < Date.now() / 1000) {
-      throw new Error('會話已過期');
+      // 檢查 token 類型
+      if (payload.type !== 'access') {
+        throw new Error('無效的令牌類型');
+      }
+
+      return {
+        valid: true,
+        user_id: payload.sub,
+        expires: payload.exp
+      };
+    } catch (error) {
+      throw new Error('令牌驗證失敗');
     }
-
-    return {
-      valid: true,
-      user_id: payload.sub,
-      expires: session.expires_at
-    };
   }
 
-  async logout(token: string | undefined) {
-    if (!token) {
-      throw new Error('無效令牌');
+  async logout(refreshToken: string | undefined) {
+    if (!refreshToken) {
+      return; // 沒有 refresh token 也算成功登出
     }
 
     await this.db.prepare(
       'DELETE FROM sessions WHERE token = ?'
-    ).bind(token).run();
+    ).bind(refreshToken).run();
   }
 
   async getUserInfo(userId: string) {
